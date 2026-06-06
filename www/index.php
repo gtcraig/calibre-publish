@@ -6,6 +6,8 @@ $title  = site_title();
 $base   = site_base();
 $view   = $_GET['view'] ?? 'recent';
 $filter = trim($_GET['filter'] ?? '');
+$page   = max(1, (int)($_GET['page'] ?? 1));
+$per    = 50;
 
 function sort_books(array &$books): void {
     usort($books, function($a, $b) {
@@ -20,18 +22,40 @@ function sort_books(array &$books): void {
     });
 }
 
+function paginate(array $books, int $page, int $per): array {
+    return array_slice($books, ($page - 1) * $per, $per);
+}
+
+function render_pagination(int $total, int $page, int $per, string $base_url): void {
+    $pages = (int)ceil($total / $per);
+    if ($pages <= 1) return;
+    $sep = (strpos($base_url, '?') !== false) ? '&' : '?';
+    echo '<nav class="pagination">';
+    for ($p = 1; $p <= $pages; $p++) {
+        if ($p === $page) {
+            echo "<span class=\"page current\">{$p}</span>";
+        } else {
+            $url = htmlspecialchars($base_url . $sep . 'page=' . $p);
+            echo "<a class=\"page\" href=\"{$url}\">{$p}</a>";
+        }
+    }
+    echo '</nav>';
+}
+
 ob_start();
 
 switch ($view) {
     // ------------------------------------------------------------------ recent
     case 'recent':
         $heading = 'Recently Added';
-        $n = (int)($site['recent_count'] ?? 20);
-        $books = recent_books($n);
-        sort_books($books);
+        $all = load_books();
+        sort_books($all);
+        $total = count($all);
+        $books = paginate($all, $page, $per);
         echo '<div class="card-grid">';
         foreach ($books as $b) render_card($b);
         echo '</div>';
+        render_pagination($total, $page, $per, $base . 'recent');
         break;
 
     // ------------------------------------------------------------------ authors
@@ -41,7 +65,6 @@ switch ($view) {
         if ($filter === '') {
             echo '<ul class="pill-list pill-authors">';
             foreach ($index as $author => $books) {
-                // Use the first book's author_ids to find this author's Calibre ID
                 $aid = 0;
                 foreach ($books as $b) {
                     $pos = array_search($author, $b['authors'] ?? []);
@@ -57,13 +80,16 @@ switch ($view) {
             echo '</ul>';
         } else {
             $author_name = is_numeric($filter) ? (author_by_id((int)$filter) ?? $filter) : $filter;
-            $books = $index[$author_name] ?? [];
-            sort_books($books);
+            $all = $index[$author_name] ?? [];
+            sort_books($all);
+            $total = count($all);
+            $books = paginate($all, $page, $per);
             echo '<p class="back"><a href="' . $base . 'authors">&larr; All Authors</a></p>';
             echo '<h2 class="filter-heading">' . h($author_name) . '</h2>';
             echo '<div class="card-grid">';
             foreach ($books as $b) render_card($b);
             echo '</div>';
+            render_pagination($total, $page, $per, $base . 'authors/' . rawurlencode($filter));
         }
         break;
 
@@ -75,22 +101,24 @@ switch ($view) {
             echo '<ul class="pill-list pill-series">';
             foreach ($index as $series => $books) {
                 if ($series === '') continue;
-                $s  = h($series);
+                $s   = h($series);
                 $sid = (int)($books[0]['series_id'] ?? 0);
-                $n  = count($books);
+                $n   = count($books);
                 echo "<li><a href=\"{$base}series/{$sid}\">{$s} <span class=\"count\">{$n}</span></a></li>";
             }
             echo '</ul>';
         } else {
-            // $filter may be a numeric ID or a legacy name
             $series_name = is_numeric($filter) ? (series_by_id((int)$filter) ?? $filter) : $filter;
-            $books = $index[$series_name] ?? [];
-            sort_books($books);
+            $all = $index[$series_name] ?? [];
+            sort_books($all);
+            $total = count($all);
+            $books = paginate($all, $page, $per);
             echo '<p class="back"><a href="' . $base . 'series">&larr; All Series</a></p>';
             echo '<h2 class="filter-heading">' . h($series_name) . '</h2>';
             echo '<div class="card-grid">';
             foreach ($books as $b) render_card($b);
             echo '</div>';
+            render_pagination($total, $page, $per, $base . 'series/' . rawurlencode($filter));
         }
         break;
 
@@ -108,13 +136,16 @@ switch ($view) {
             }
             echo '</ul>';
         } else {
-            $books = $index[$filter] ?? [];
-            sort_books($books);
+            $all = $index[$filter] ?? [];
+            sort_books($all);
+            $total = count($all);
+            $books = paginate($all, $page, $per);
             echo '<p class="back"><a href="' . $base . 'tags">&larr; All Tags</a></p>';
             echo '<h2 class="filter-heading">' . h($filter) . '</h2>';
             echo '<div class="card-grid">';
             foreach ($books as $b) render_card($b);
             echo '</div>';
+            render_pagination($total, $page, $per, $base . 'tags/' . rawurlencode($filter));
         }
         break;
 
@@ -134,13 +165,16 @@ switch ($view) {
             echo '</ul>';
         } else {
             $pub_name = is_numeric($filter) ? (publisher_by_id((int)$filter) ?? $filter) : $filter;
-            $books = $index[$pub_name] ?? [];
-            sort_books($books);
+            $all = $index[$pub_name] ?? [];
+            sort_books($all);
+            $total = count($all);
+            $books = paginate($all, $page, $per);
             echo '<p class="back"><a href="' . $base . 'publishers">&larr; All Publishers</a></p>';
             echo '<h2 class="filter-heading">' . h($pub_name) . '</h2>';
             echo '<div class="card-grid">';
             foreach ($books as $b) render_card($b);
             echo '</div>';
+            render_pagination($total, $page, $per, $base . 'publishers/' . rawurlencode($filter));
         }
         break;
 }
