@@ -104,7 +104,7 @@ $pages = $total ? (int)ceil($total / $per) : 0;
 <main class="main-content fulltext-page">
   <h1 class="page-heading">Full-text Search</h1>
 
-  <form class="fulltext-form" method="get" action="fulltext.php">
+  <form class="fulltext-form" method="get" action="<?= h($base) ?>fulltext">
     <input class="fulltext-input" type="search" name="q"
            value="<?= h($q) ?>" placeholder="Search within books…" autofocus>
     <button class="btn-search" type="submit">Search</button>
@@ -162,7 +162,7 @@ $pages = $total ? (int)ceil($total / $per) : 0;
         <?php if ($p === $page): ?>
           <span class="page current"><?= $p ?></span>
         <?php else: ?>
-          <a class="page" href="?q=<?= urlencode($q) ?>&page=<?= $p ?>"><?= $p ?></a>
+          <a class="page" href="<?= h($base) ?>fulltext?q=<?= urlencode($q) ?>&page=<?= $p ?>"><?= $p ?></a>
         <?php endif; ?>
       <?php endfor; ?>
     </nav>
