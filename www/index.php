@@ -28,13 +28,12 @@ switch ($view) {
         $heading = 'Browse by Author';
         $index = build_index('authors');
         if ($filter === '') {
-            // List of authors
-            echo '<ul class="browse-list">';
+            echo '<ul class="pill-list pill-authors">';
             foreach ($index as $author => $books) {
-                $a = h($author);
+                $a  = h($author);
                 $af = urlencode($author);
-                $n = count($books);
-                echo "<li><a href=\"?view=authors&amp;filter={$af}\">{$a}</a> <span class=\"count\">{$n}</span></li>";
+                $n  = count($books);
+                echo "<li><a href=\"?view=authors&amp;filter={$af}\">{$a} <span class=\"count\">{$n}</span></a></li>";
             }
             echo '</ul>';
         } else {
@@ -52,13 +51,13 @@ switch ($view) {
         $heading = 'Browse by Series';
         $index = build_index('series');
         if ($filter === '') {
-            echo '<ul class="browse-list">';
+            echo '<ul class="pill-list pill-series">';
             foreach ($index as $series => $books) {
                 if ($series === '') continue;
                 $s  = h($series);
                 $sf = urlencode($series);
                 $n  = count($books);
-                echo "<li><a href=\"?view=series&amp;filter={$sf}\">{$s}</a> <span class=\"count\">{$n}</span></li>";
+                echo "<li><a href=\"?view=series&amp;filter={$sf}\">{$s} <span class=\"count\">{$n}</span></a></li>";
             }
             echo '</ul>';
         } else {
@@ -77,12 +76,12 @@ switch ($view) {
         $heading = 'Browse by Tag';
         $index = build_index('tags');
         if ($filter === '') {
-            echo '<ul class="browse-list tag-cloud">';
+            echo '<ul class="pill-list pill-tags">';
             foreach ($index as $tag => $books) {
                 $t  = h($tag);
                 $tf = urlencode($tag);
                 $n  = count($books);
-                echo "<li><a href=\"?view=tags&amp;filter={$tf}\" data-count=\"{$n}\">{$t} <span class=\"count\">{$n}</span></a></li>";
+                echo "<li><a href=\"?view=tags&amp;filter={$tf}\">{$t} <span class=\"count\">{$n}</span></a></li>";
             }
             echo '</ul>';
         } else {
@@ -100,7 +99,7 @@ switch ($view) {
         $heading = 'Browse by Publisher';
         $index = build_index('publisher');
         if ($filter === '') {
-            echo '<ul class="pill-list">';
+            echo '<ul class="pill-list pill-publishers">';
             foreach ($index as $pub => $books) {
                 if ($pub === '') continue;
                 $p  = h($pub);
@@ -130,6 +129,7 @@ $content_html = ob_get_clean();
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title><?= $title ?></title>
   <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="assets/theme.css">
 </head>
 <body>
 <header class="site-header">

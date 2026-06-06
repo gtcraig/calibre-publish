@@ -289,6 +289,20 @@ def publish(config_path: str) -> None:
                 shutil.copy2(src, dst)
         print(f"[publish] Copied PHP templates from {template_dir}")
 
+    # ---- Write theme.css ----
+    theme = cfg.get("theme", {})
+    accent      = theme.get("accent",      "#4a7c59")
+    accent_dark = theme.get("accent_dark", "#335a40")
+    theme_css = f""":root {{
+  --accent:    {accent};
+  --accent-dk: {accent_dark};
+}}
+"""
+    theme_path = output_dir / "assets" / "theme.css"
+    theme_path.parent.mkdir(parents=True, exist_ok=True)
+    theme_path.write_text(theme_css)
+    print(f"[publish] Wrote theme.css (accent={accent})")
+
     print(f"\n[publish] Done. {len(books)} books published to {output_dir}")
 
     # ---- FTP deploy (optional) ----
@@ -300,8 +314,8 @@ def publish(config_path: str) -> None:
 # FTP deploy
 # ---------------------------------------------------------------------------
 
-ALWAYS_UPLOAD = {".php", ".js", ".css", ".svg"}
-SIZE_CHECK     = {".epub", ".pdf", ".jpg", ".jpeg", ".json", ".txt"}
+ALWAYS_UPLOAD = {".php", ".js", ".css", ".svg", ".json"}
+SIZE_CHECK     = {".epub", ".pdf", ".jpg", ".jpeg", ".txt"}
 
 
 def _ftp_ensure_dir(ftp: ftplib.FTP, remote_dir: str) -> None:

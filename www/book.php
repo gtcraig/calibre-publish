@@ -35,6 +35,7 @@ $page_title = h($title_str) . ' — ' . site_title();
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title><?= $page_title ?></title>
   <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="assets/theme.css">
 </head>
 <body>
 <header class="site-header">
