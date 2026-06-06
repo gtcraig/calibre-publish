@@ -151,6 +151,9 @@ $content_html = ob_get_clean();
       <a href="<?= h($base) ?>publishers" <?= $view==='publishers' ? 'class="active"' : '' ?>>Publishers</a>
       <a href="<?= h($base) ?>authors"    <?= $view==='authors'    ? 'class="active"' : '' ?>>Authors</a>
       <a href="<?= h($base) ?>tags"       <?= $view==='tags'       ? 'class="active"' : '' ?>>Tags</a>
+      <?php if (main_site_url()): ?>
+        <a href="<?= h(main_site_url()) ?>" class="nav-main-site" target="_blank"><?= h(main_site_name()) ?> ↗</a>
+      <?php endif; ?>
     </nav>
   </div>
   <div class="search-bar">

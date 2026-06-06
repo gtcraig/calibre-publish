@@ -90,6 +90,9 @@ $pages = $total ? (int)ceil($total / $per) : 0;
       <a href="<?= h($base) ?>publishers">Publishers</a>
       <a href="<?= h($base) ?>authors">Authors</a>
       <a href="<?= h($base) ?>tags">Tags</a>
+      <?php if (main_site_url()): ?>
+        <a href="<?= h(main_site_url()) ?>" class="nav-main-site" target="_blank"><?= h(main_site_name()) ?> ↗</a>
+      <?php endif; ?>
     </nav>
   </div>
   <div class="search-bar">

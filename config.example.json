@@ -9,6 +9,8 @@
 
   "site_title": "My Book Library",
   "site_url": "https://example.com/Library",
+  "main_site_url": "https://example.com",
+  "main_site_name": "Main Site",
   "feed_subtitle": "All books, newest first",
 
   "recent_count": 20,

@@ -48,6 +48,9 @@ function site_title(): string {
     return htmlspecialchars($cfg['title'] ?? 'Library', ENT_QUOTES);
 }
 
+function main_site_url(): string  { return load_site()['main_site_url']  ?? ''; }
+function main_site_name(): string { return load_site()['main_site_name'] ?? ''; }
+
 function h(string $s): string {
     return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }

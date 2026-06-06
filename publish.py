@@ -397,6 +397,8 @@ def publish(config_path: str) -> None:
         "generated": datetime.now().astimezone().strftime("%d %B %Y %H:%M"),
         "book_count": len(books),
         "base_path": base_path,
+        "main_site_url":  cfg.get("main_site_url", ""),
+        "main_site_name": cfg.get("main_site_name", ""),
         "series_by_id":     id_to_name["series_by_id"],
         "authors_by_id":    id_to_name["authors_by_id"],
         "publishers_by_id": id_to_name["publishers_by_id"],
