@@ -2,6 +2,7 @@
 require_once __DIR__ . '/_lib.php';
 
 $site  = load_site();
+$base  = site_base();
 $q     = trim($_GET['q'] ?? '');
 $page  = max(1, (int)($_GET['page'] ?? 1));
 $per   = 15;
@@ -74,6 +75,7 @@ $pages = $total ? (int)ceil($total / $per) : 0;
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <base href="<?= h($base) ?>">
   <title>Full-text search — <?= site_title() ?></title>
   <link rel="stylesheet" href="assets/style.css">
   <link rel="stylesheet" href="assets/theme.css">
@@ -83,11 +85,11 @@ $pages = $total ? (int)ceil($total / $per) : 0;
   <div class="site-header-inner">
     <a class="site-name" href="index.php"><?= site_title() ?></a>
     <nav class="main-nav">
-      <a href="index.php?view=recent">Recent</a>
-      <a href="index.php?view=series">Series</a>
-      <a href="index.php?view=publishers">Publishers</a>
-      <a href="index.php?view=authors">Authors</a>
-      <a href="index.php?view=tags">Tags</a>
+      <a href="<?= h($base) ?>recent">Recent</a>
+      <a href="<?= h($base) ?>series">Series</a>
+      <a href="<?= h($base) ?>publishers">Publishers</a>
+      <a href="<?= h($base) ?>authors">Authors</a>
+      <a href="<?= h($base) ?>tags">Tags</a>
     </nav>
   </div>
   <div class="search-bar">
@@ -95,7 +97,7 @@ $pages = $total ? (int)ceil($total / $per) : 0;
       <input id="quick-search" type="search" placeholder="Search titles &amp; authors…" autocomplete="off" aria-label="Search titles and authors">
       <div id="search-results" class="search-dropdown" hidden></div>
     </div>
-    <a href="fulltext.php" class="btn-fulltext active">Full-text search</a>
+    <a href="<?= h($base) ?>fulltext" class="btn-fulltext active">Full-text search</a>
   </div>
 </header>
 
@@ -132,12 +134,12 @@ $pages = $total ? (int)ceil($total / $per) : 0;
         $bid   = (int)$b['id'];
       ?>
       <div class="ft-result">
-        <a href="book.php?id=<?= $bid ?>" class="ft-cover">
+        <a href="book/<?= $bid ?>" class="ft-cover">
           <img src="<?= $cover ?>" alt="<?= $title ?>" loading="lazy"
                onerror="this.src='assets/no-cover.svg'">
         </a>
         <div class="ft-body">
-          <h3><a href="book.php?id=<?= $bid ?>"><?= $title ?></a></h3>
+          <h3><a href="book/<?= $bid ?>"><?= $title ?></a></h3>
           <p class="ft-author"><?= $auth ?></p>
           <p class="ft-snippet"><?= $r['snippet'] ?></p>
           <?php $dl_name = preg_replace('/[^\w\s\-]/u', '', $b['title']); ?>

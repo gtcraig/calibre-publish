@@ -15,6 +15,8 @@ import json
 import os
 import os.path
 import re
+import sqlite3
+from urllib.parse import urlparse
 import shutil
 import subprocess
 import sys
@@ -75,6 +77,57 @@ def run(cmd: list[str], check=True) -> subprocess.CompletedProcess:
 # ---------------------------------------------------------------------------
 # Calibre helpers
 # ---------------------------------------------------------------------------
+
+def load_calibre_data(library_path: str, book_ids: list) -> tuple[dict, dict]:
+    """
+    Returns:
+      book_data  — {book_id: {series_id, author_ids, publisher_id}}
+      id_to_name — {series_by_id, authors_by_id, publishers_by_id}
+    """
+    db_path = os.path.join(library_path, "metadata.db")
+    book_data  = {}
+    id_to_name = {"series_by_id": {}, "authors_by_id": {}, "publishers_by_id": {}}
+
+    try:
+        con = sqlite3.connect(db_path)
+        cur = con.cursor()
+
+        # Global id→name maps for PHP lookups
+        for table, key in [("series", "series_by_id"),
+                            ("authors", "authors_by_id"),
+                            ("publishers", "publishers_by_id")]:
+            for row in cur.execute(f"SELECT id, name FROM {table}"):
+                id_to_name[key][str(row[0])] = row[1]
+
+        # Per-book IDs via link tables (no name matching needed)
+        for bid in book_ids:
+            row = cur.execute(
+                "SELECT series FROM books_series_link WHERE book=?", (bid,)
+            ).fetchone()
+            series_id = row[0] if row else 0
+
+            author_rows = cur.execute(
+                "SELECT author FROM books_authors_link WHERE book=? ORDER BY id", (bid,)
+            ).fetchall()
+            author_ids = [r[0] for r in author_rows]
+
+            row = cur.execute(
+                "SELECT publisher FROM books_publishers_link WHERE book=?", (bid,)
+            ).fetchone()
+            publisher_id = row[0] if row else 0
+
+            book_data[bid] = {
+                "series_id":    series_id,
+                "author_ids":   author_ids,
+                "publisher_id": publisher_id,
+            }
+
+        con.close()
+    except Exception as e:
+        print(f"[WARN] Could not read metadata.db: {e}", file=sys.stderr)
+
+    return book_data, id_to_name
+
 
 CALIBREDB_FIELDS = (
     "id,title,authors,series,series_index,tags,publisher,pubdate,timestamp,"
@@ -208,10 +261,18 @@ def publish(config_path: str) -> None:
         except Exception:
             cache = {}
 
-    # ---- Fetch metadata ----
+    # ---- Fetch metadata ---- (early, so we have book IDs for SQLite lookup)
     print("[publish] Querying calibredb…")
     raw_books = calibredb_list(library_path, saved_search)
+    raw_books.sort(key=lambda r: r.get("timestamp") or "", reverse=True)
     print(f"[publish] Found {len(raw_books)} books.")
+
+    # ---- Load Calibre IDs from metadata.db ----
+    all_ids = [r["id"] for r in raw_books]
+    calibre_book_data, id_to_name = load_calibre_data(library_path, all_ids)
+    print(f"[publish] Loaded IDs for {len(calibre_book_data)} books from metadata.db")
+
+
 
     books = []
     new_cache = {}
@@ -240,6 +301,11 @@ def publish(config_path: str) -> None:
             cover_ok = (covers_dir / f"{bid}.jpg").is_file()
 
             if meta_unchanged and epub_ok and pdf_ok and cover_ok:
+                # Always refresh IDs from metadata.db (cache may predate ID fix)
+                cb = calibre_book_data.get(bid, {})
+                cached["series_id"]    = cb.get("series_id",    0)
+                cached["publisher_id"] = cb.get("publisher_id", 0)
+                cached["author_ids"]   = cb.get("author_ids",   [])
                 books.append(cached)
                 new_cache[bid_str] = cached
                 skipped += 1
@@ -293,6 +359,12 @@ def publish(config_path: str) -> None:
 
         book["pdf"] = pdf_web
 
+        # ---- Add Calibre IDs (from link tables, not name matching) ----
+        cb = calibre_book_data.get(bid, {})
+        book["series_id"]    = cb.get("series_id",    0)
+        book["publisher_id"] = cb.get("publisher_id", 0)
+        book["author_ids"]   = cb.get("author_ids",   [])
+
         books.append(book)
         new_cache[bid_str] = book
         title_short = book["title"][:50]
@@ -316,11 +388,18 @@ def publish(config_path: str) -> None:
         generate_feed(books, cfg, output_dir)
 
     # ---- Write site config ----
+    site_url   = cfg.get("site_url", "")
+    base_path  = (urlparse(site_url).path.rstrip("/") + "/") if site_url else "/"
+
     site_cfg = {
         "title": site_title,
         "recent_count": books_per_page_recent,
         "generated": datetime.now().astimezone().strftime("%d %B %Y %H:%M"),
         "book_count": len(books),
+        "base_path": base_path,
+        "series_by_id":     id_to_name["series_by_id"],
+        "authors_by_id":    id_to_name["authors_by_id"],
+        "publishers_by_id": id_to_name["publishers_by_id"],
     }
     with open(output_dir / "site.json", "w") as f:
         json.dump(site_cfg, f, indent=2)
@@ -456,34 +535,28 @@ ALWAYS_UPLOAD = {".php", ".js", ".css", ".svg", ".json", ".xml"}
 SIZE_CHECK     = {".epub", ".pdf", ".jpg", ".jpeg", ".txt"}
 
 
-def _ftp_ensure_dir(ftp: ftplib.FTP, remote_dir: str) -> None:
+def _ftp_ensure_dir(ftp: ftplib.FTP, remote_dir: str, _made: set) -> None:
+    """Create remote directory tree if needed (cached to avoid redundant MKD)."""
     parts = [p for p in remote_dir.replace("\\", "/").split("/") if p]
     path = ""
     for part in parts:
         path += "/" + part
+        if path in _made:
+            continue
         try:
-            ftp.cwd(path)
-        except ftplib.error_perm:
             ftp.mkd(path)
-            ftp.cwd(path)
+        except ftplib.error_perm:
+            pass  # already exists
+        _made.add(path)
 
 
-def _remote_sizes(ftp: ftplib.FTP, remote_dir: str) -> dict:
-    sizes = {}
+def _remote_size(ftp: ftplib.FTP, remote_path: str) -> int | None:
+    """Get size of a single remote file via the SIZE command."""
     try:
-        ftp.cwd(remote_dir)
-    except ftplib.error_perm:
-        return sizes
-    lines = []
-    ftp.retrlines("LIST", lines.append)
-    for line in lines:
-        parts = line.split()
-        if len(parts) >= 9:
-            try:
-                sizes[parts[8]] = int(parts[4])
-            except (ValueError, IndexError):
-                pass
-    return sizes
+        ftp.voidcmd("TYPE I")
+        return ftp.size(remote_path)
+    except Exception:
+        return None
 
 
 def deploy(local_dir: Path, cfg: dict) -> None:
@@ -493,32 +566,35 @@ def deploy(local_dir: Path, cfg: dict) -> None:
     remote_base = cfg["ftp_remote_dir"].rstrip("/")
 
     print(f"\n[deploy] Connecting to {host}…")
-    ftp = ftplib.FTP(host)
+    ftp = ftplib.FTP(host, timeout=30)
     ftp.login(user, password)
     ftp.set_pasv(True)
     print(f"[deploy] Connected. Uploading → {remote_base}")
 
     uploaded = skipped = 0
+    _made_dirs: set = set()
+    all_files = sorted(local_dir.rglob("*"))
+    print(f"[deploy] {len(all_files)} total paths to scan")
 
-    for local_path in sorted(local_dir.rglob("*")):
+    for local_path in all_files:
         if not local_path.is_file():
             continue
 
-        rel        = local_path.relative_to(local_dir)
-        remote_dir = remote_base + ("/" + "/".join(rel.parts[:-1]) if len(rel.parts) > 1 else "")
+        rel         = local_path.relative_to(local_dir)
         remote_path = remote_base + "/" + "/".join(rel.parts)
-        ext        = local_path.suffix.lower()
+        ext         = local_path.suffix.lower()
 
         if ext not in ALWAYS_UPLOAD and ext not in SIZE_CHECK:
             continue
 
         if ext in SIZE_CHECK:
-            remote_sz = _remote_sizes(ftp, remote_dir).get(local_path.name)
+            remote_sz = _remote_size(ftp, remote_path)
             if remote_sz == local_path.stat().st_size:
                 skipped += 1
                 continue
 
-        _ftp_ensure_dir(ftp, remote_dir)
+        remote_dir = remote_path.rsplit("/", 1)[0]
+        _ftp_ensure_dir(ftp, remote_dir, _made_dirs)
         with open(local_path, "rb") as f:
             ftp.storbinary(f"STOR {remote_path}", f)
 

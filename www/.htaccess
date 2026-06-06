@@ -1,0 +1,13 @@
+RewriteEngine On
+
+# /book/123  →  book.php?id=123
+RewriteRule ^book/([0-9]+)/?$  book.php?id=$1  [L,QSA]
+
+# /series, /authors, /tags, /publishers, /recent  →  index.php?view=X
+RewriteRule ^(recent|authors|series|publishers|tags)/?$  index.php?view=$1  [L,QSA]
+
+# /series/Filter  →  index.php?view=series&filter=Filter
+RewriteRule ^(recent|authors|series|publishers|tags)/(.+)$  index.php?view=$1&filter=$2  [L,QSA]
+
+# /fulltext  →  fulltext.php
+RewriteRule ^fulltext/?$  fulltext.php  [L,QSA]

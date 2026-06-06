@@ -16,6 +16,7 @@ if (!$book) {
     exit;
 }
 
+$base       = site_base();
 $title_str  = $book['title'];
 $authors    = implode(', ', $book['authors'] ?? []);
 $tags       = $book['tags'] ?? [];
@@ -33,6 +34,11 @@ $page_title = h($title_str) . ' — ' . site_title();
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <?php
+  // Resolve assets relative to the site root, not the /book/123 URL
+  $base = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\') . '/';
+  echo '<base href="' . htmlspecialchars($base) . '">';
+  ?>
   <title><?= $page_title ?></title>
   <link rel="stylesheet" href="assets/style.css">
   <link rel="stylesheet" href="assets/theme.css">
@@ -42,11 +48,11 @@ $page_title = h($title_str) . ' — ' . site_title();
   <div class="site-header-inner">
     <a class="site-name" href="index.php"><?= site_title() ?></a>
     <nav class="main-nav">
-      <a href="index.php?view=recent">Recent</a>
-      <a href="index.php?view=series">Series</a>
-      <a href="index.php?view=publishers">Publishers</a>
-      <a href="index.php?view=authors">Authors</a>
-      <a href="index.php?view=tags">Tags</a>
+      <a href="<?= h($base) ?>recent">Recent</a>
+      <a href="<?= h($base) ?>series">Series</a>
+      <a href="<?= h($base) ?>publishers">Publishers</a>
+      <a href="<?= h($base) ?>authors">Authors</a>
+      <a href="<?= h($base) ?>tags">Tags</a>
     </nav>
   </div>
   <div class="search-bar">
@@ -54,7 +60,7 @@ $page_title = h($title_str) . ' — ' . site_title();
       <input id="quick-search" type="search" placeholder="Search titles &amp; authors…" autocomplete="off" aria-label="Search titles and authors">
       <div id="search-results" class="search-dropdown" hidden></div>
     </div>
-    <a href="fulltext.php" class="btn-fulltext">Full-text search</a>
+    <a href="<?= h($base) ?>fulltext" class="btn-fulltext">Full-text search</a>
   </div>
 </header>
 
@@ -87,7 +93,8 @@ $page_title = h($title_str) . ' — ' . site_title();
           by
           <?php foreach ($book['authors'] as $i => $a): ?>
             <?= $i > 0 ? ', ' : '' ?>
-            <a href="index.php?view=authors&filter=<?= urlencode($a) ?>"><?= h($a) ?></a>
+            <?php $aid = (int)($book['author_ids'][$i] ?? 0); ?>
+            <a href="<?= h($base) ?>authors/<?= $aid ?>"><?= h($a) ?></a>
           <?php endforeach; ?>
         </p>
       <?php endif; ?>
@@ -95,14 +102,14 @@ $page_title = h($title_str) . ' — ' . site_title();
       <?php if ($series): ?>
         <p class="book-series">
           Series:
-          <a href="index.php?view=series&filter=<?= urlencode($series) ?>"><?= h($series) ?></a>
+          <a href="<?= h($base) ?>series/<?= (int)($book['series_id'] ?? 0) ?>"><?= h($series) ?></a>
           #<?= $si ?>
         </p>
       <?php endif; ?>
 
       <?php if (!empty($book['publisher'])): ?>
         <p class="book-publisher">
-          Publisher: <a href="index.php?view=publishers&filter=<?= urlencode($book['publisher']) ?>"><?= h($book['publisher']) ?></a>
+          Publisher: <a href="<?= h($base) ?>publishers/<?= (int)($book['publisher_id'] ?? 0) ?>"><?= h($book['publisher']) ?></a>
         </p>
       <?php endif; ?>
       <?php if ($pubdate): ?>
@@ -112,7 +119,7 @@ $page_title = h($title_str) . ' — ' . site_title();
       <?php if ($tags): ?>
         <p class="book-tags">
           <?php foreach ($tags as $tag): ?>
-            <a class="tag" href="index.php?view=tags&filter=<?= urlencode($tag) ?>"><?= h($tag) ?></a>
+            <a class="tag" href="<?= h($base) ?>tags/<?= urlencode($tag) ?>"><?= h($tag) ?></a>
           <?php endforeach; ?>
         </p>
       <?php endif; ?>

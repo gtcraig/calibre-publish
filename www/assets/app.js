@@ -55,7 +55,7 @@
       const el = document.createElement('div');
       el.className = 'sd-item';
       el.setAttribute('role', 'option');
-      el.dataset.href = 'book.php?id=' + book.id;
+      el.dataset.href = 'book/' + book.id;
 
       const authors = (book.authors || []).join(', ');
       const series  = book.series

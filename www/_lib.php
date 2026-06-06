@@ -29,6 +29,20 @@ function book_by_id(int $id): ?array {
     return null;
 }
 
+function _lookup_by_id(string $map_key, int $id): ?string {
+    $cfg = load_site();
+    return $cfg[$map_key][(string)$id] ?? null;
+}
+
+function series_by_id(int $id): ?string    { return _lookup_by_id('series_by_id', $id); }
+function author_by_id(int $id): ?string    { return _lookup_by_id('authors_by_id', $id); }
+function publisher_by_id(int $id): ?string { return _lookup_by_id('publishers_by_id', $id); }
+
+function site_base(): string {
+    $cfg = load_site();
+    return $cfg['base_path'] ?? '/';
+}
+
 function site_title(): string {
     $cfg = load_site();
     return htmlspecialchars($cfg['title'] ?? 'Library', ENT_QUOTES);
@@ -75,7 +89,7 @@ function render_card(array $book): void {
     $epub = $book['epub'] ? '<a class="dl epub" href="' . h($book['epub']) . '" download="' . h($dl_name) . '.epub" target="_blank">EPUB</a>' : '';
     $pdf  = $book['pdf']  ? '<a class="dl pdf"  href="' . h($book['pdf'])  . '" download="' . h($dl_name) . '.pdf"  target="_blank">PDF</a>'  : '';
     echo "<article class=\"card\">\n";
-    echo "  <a href=\"book.php?id={$id}\">\n";
+    echo "  <a href=\"book/{$id}\">\n";
     echo "    <img class=\"cover\" src=\"{$cover}\" alt=\"{$title}\" loading=\"lazy\" onerror=\"this.src='assets/no-cover.svg'\">\n";
     echo "    <div class=\"card-body\">\n";
     echo "      <h3 class=\"card-title\">{$title}</h3>\n";
