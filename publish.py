@@ -86,10 +86,11 @@ def calibredb_list(library_path: str, saved_search: str) -> list[dict]:
     cmd = [
         "calibredb", "list",
         "--library-path", library_path,
-        "--search", f"search:{saved_search}",
         "--fields", CALIBREDB_FIELDS,
         "--for-machine",
     ]
+    if saved_search:
+        cmd += ["--search", f"search:{saved_search}"]
     result = run(cmd, check=False)
     if result.returncode != 0:
         print(f"[ERROR] calibredb list failed:\n{result.stderr}", file=sys.stderr)
