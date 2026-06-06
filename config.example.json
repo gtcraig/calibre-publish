@@ -1,0 +1,17 @@
+{
+  "_comment": "Copy this to config.json (or site1.json / site2.json) and fill in your values.",
+
+  "library_path": "/path/to/your/Calibre Library",
+
+  "saved_search": "MySavedSearch",
+
+  "output_dir": "/path/to/output/site1",
+
+  "site_title": "My Book Library",
+
+  "recent_count": 20,
+
+  "extract_text": true,
+
+  "max_text_chars": 500000
+}

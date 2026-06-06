@@ -1,0 +1,19 @@
+# Personal config files (contain library paths / credentials)
+*.json
+!config.example.json
+
+# Published output directories
+/output/
+/site1/
+/site2/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
