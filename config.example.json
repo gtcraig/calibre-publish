@@ -8,6 +8,8 @@
   "output_dir": "/path/to/output/site1",
 
   "site_title": "My Book Library",
+  "site_url": "https://example.com/Library",
+  "feed_subtitle": "All books, newest first",
 
   "recent_count": 20,
 

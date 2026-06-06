@@ -18,6 +18,7 @@ import re
 import shutil
 import subprocess
 import sys
+import uuid as uuid_mod
 import zipfile
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -198,16 +199,52 @@ def publish(config_path: str) -> None:
     for d in [output_dir, files_dir, covers_dir, text_dir, assets_dir]:
         d.mkdir(parents=True, exist_ok=True)
 
+    # ---- Load cache ----
+    cache_path = output_dir / "cache.json"
+    cache = {}
+    if cache_path.is_file():
+        try:
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        except Exception:
+            cache = {}
+
     # ---- Fetch metadata ----
     print("[publish] Querying calibredb…")
     raw_books = calibredb_list(library_path, saved_search)
     print(f"[publish] Found {len(raw_books)} books.")
 
     books = []
+    new_cache = {}
+    skipped = 0
+
     for raw in raw_books:
         book = normalise_book(raw)
         bid = book["id"]
-        book_files_dir = files_dir / str(bid)
+        bid_str = str(bid)
+        book_files_dir = files_dir / bid_str
+
+        # ---- Cache check ----
+        # A book is unchanged if: metadata matches the cache AND all expected
+        # output files exist on disk.
+        cached = cache.get(bid_str)
+        if cached:
+            meta_unchanged = (
+                cached.get("timestamp") == book["timestamp"] and
+                cached.get("title")     == book["title"]     and
+                cached.get("authors")   == book["authors"]   and
+                cached.get("has_epub")  == book["has_epub"]  and
+                cached.get("has_pdf")   == book["has_pdf"]
+            )
+            epub_ok = (not book["has_epub"]) or (book_files_dir / "book.epub").is_file()
+            pdf_ok  = (not book["has_pdf"])  or (book_files_dir / "book.pdf").is_file()
+            cover_ok = (covers_dir / f"{bid}.jpg").is_file()
+
+            if meta_unchanged and epub_ok and pdf_ok and cover_ok:
+                books.append(cached)
+                new_cache[bid_str] = cached
+                skipped += 1
+                continue
+
         book_files_dir.mkdir(parents=True, exist_ok=True)
 
         # ---- Copy cover ----
@@ -257,14 +294,26 @@ def publish(config_path: str) -> None:
         book["pdf"] = pdf_web
 
         books.append(book)
+        new_cache[bid_str] = book
         title_short = book["title"][:50]
         print(f"  [{bid}] {title_short}")
+
+    if skipped:
+        print(f"[publish] Skipped {skipped} unchanged books.")
+
+    # ---- Save cache ----
+    cache_path.write_text(json.dumps(new_cache, ensure_ascii=False, indent=2),
+                          encoding="utf-8")
 
     # ---- Write books.json ----
     books_json = output_dir / "books.json"
     with open(books_json, "w", encoding="utf-8") as f:
         json.dump(books, f, ensure_ascii=False, indent=2)
     print(f"[publish] Wrote {books_json}")
+
+    # ---- Write feed.xml ----
+    if cfg.get("site_url"):
+        generate_feed(books, cfg, output_dir)
 
     # ---- Write site config ----
     site_cfg = {
@@ -312,10 +361,98 @@ def publish(config_path: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Atom feed
+# ---------------------------------------------------------------------------
+
+def xml_esc(s: str) -> str:
+    return (str(s)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;"))
+
+
+# Stable UUID namespace — same book ID always produces the same UUID
+_UUID_NS = uuid_mod.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+
+
+def generate_feed(books: list, cfg: dict, output_dir: Path) -> None:
+    site_url    = cfg["site_url"].rstrip("/")
+    title       = cfg.get("site_title", "Library")
+    subtitle    = cfg.get("feed_subtitle", "")
+    now_iso     = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    sorted_books = sorted(books,
+                          key=lambda b: b.get("timestamp") or "",
+                          reverse=True)
+
+    lines = [
+        "<?xml version='1.0' encoding='utf-8'?>",
+        '<feed xmlns="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">',
+        f"  <title>{xml_esc(title)}</title>",
+    ]
+    if subtitle:
+        lines.append(f"  <subtitle>{xml_esc(subtitle)}</subtitle>")
+    lines += [
+        f'  <link href="{site_url}" />',
+        f"  <id>{site_url}</id>",
+        f"  <updated>{now_iso}</updated>",
+        "  <generator>publish.py</generator>",
+    ]
+
+    for book in sorted_books:
+        bid         = book["id"]
+        entry_uuid  = uuid_mod.uuid5(_UUID_NS, str(bid))
+        t           = book.get("title", "")
+        authors     = book.get("authors") or ["Unknown"]
+        publisher   = book.get("publisher", "")
+        tags        = book.get("tags") or []
+        series      = book.get("series", "")
+        series_idx  = book.get("series_index", 0)
+        pubdate     = book.get("pubdate") or book.get("timestamp") or now_iso[:10]
+        published   = pubdate + "T00:00:00Z" if len(pubdate) == 10 else pubdate
+
+        epub_url = f"{site_url}/{book['epub']}" if book.get("epub") else ""
+        pdf_url  = f"{site_url}/{book['pdf']}"  if book.get("pdf")  else ""
+
+        content_parts = []
+        if epub_url:
+            content_parts.append(f'<p><a href="{epub_url}">⬇ Download EPUB</a></p>')
+        if pdf_url:
+            content_parts.append(f'<p><a href="{pdf_url}">⬇ Download PDF</a></p>')
+        content_html = xml_esc("".join(content_parts))
+
+        lines.append("  <entry>")
+        lines.append(f"    <title>{xml_esc(t)}</title>")
+        lines.append(f"    <id>urn:uuid:{entry_uuid}</id>")
+        lines.append(f"    <published>{published}</published>")
+        lines.append(f"    <updated>{published}</updated>")
+        for author in authors:
+            lines.append(f"    <author><name>{xml_esc(author)}</name></author>")
+        if epub_url:
+            lines.append(f'    <link rel="alternate" type="application/epub+zip" href="{epub_url}" title="{xml_esc(t)}" />')
+            lines.append(f'    <link rel="enclosure" type="application/epub+zip" href="{epub_url}" title="{xml_esc(t)}" />')
+        lines.append(f"    <content type=\"html\">{content_html}</content>")
+        if publisher:
+            lines.append(f"    <dc:publisher>{xml_esc(publisher)}</dc:publisher>")
+        for tag in tags:
+            lines.append(f'    <category term="{xml_esc(tag)}" />')
+        if series:
+            lines.append(f"    <dc:relation>{xml_esc(series)} [{series_idx}]</dc:relation>")
+        lines.append("  </entry>")
+
+    lines.append("</feed>")
+
+    feed_path = output_dir / "feed.xml"
+    feed_path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"[publish] Wrote feed.xml ({len(sorted_books)} entries)")
+
+
+# ---------------------------------------------------------------------------
 # FTP deploy
 # ---------------------------------------------------------------------------
 
-ALWAYS_UPLOAD = {".php", ".js", ".css", ".svg", ".json"}
+ALWAYS_UPLOAD = {".php", ".js", ".css", ".svg", ".json", ".xml"}
 SIZE_CHECK     = {".epub", ".pdf", ".jpg", ".jpeg", ".txt"}
 
 

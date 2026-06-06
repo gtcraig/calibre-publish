@@ -2,6 +2,9 @@
 *.json
 !config.example.json
 
+# Per-site publish cache (output directory, not source)
+cache.json
+
 # Published output directories
 /output/
 /site1/
