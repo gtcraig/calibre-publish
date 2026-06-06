@@ -7,6 +7,19 @@ $base   = site_base();
 $view   = $_GET['view'] ?? 'recent';
 $filter = trim($_GET['filter'] ?? '');
 
+function sort_books(array &$books): void {
+    usort($books, function($a, $b) {
+        // 1. pubdate descending
+        $pd = strcmp($b['pubdate'] ?? '', $a['pubdate'] ?? '');
+        if ($pd !== 0) return $pd;
+        // 2. series name ascending
+        $ps = strcmp($a['series'] ?? '', $b['series'] ?? '');
+        if ($ps !== 0) return $ps;
+        // 3. series index ascending
+        return ($a['series_index'] ?? 0) <=> ($b['series_index'] ?? 0);
+    });
+}
+
 ob_start();
 
 switch ($view) {
@@ -15,6 +28,7 @@ switch ($view) {
         $heading = 'Recently Added';
         $n = (int)($site['recent_count'] ?? 20);
         $books = recent_books($n);
+        sort_books($books);
         echo '<div class="card-grid">';
         foreach ($books as $b) render_card($b);
         echo '</div>';
@@ -44,6 +58,7 @@ switch ($view) {
         } else {
             $author_name = is_numeric($filter) ? (author_by_id((int)$filter) ?? $filter) : $filter;
             $books = $index[$author_name] ?? [];
+            sort_books($books);
             echo '<p class="back"><a href="' . $base . 'authors">&larr; All Authors</a></p>';
             echo '<h2 class="filter-heading">' . h($author_name) . '</h2>';
             echo '<div class="card-grid">';
@@ -70,7 +85,7 @@ switch ($view) {
             // $filter may be a numeric ID or a legacy name
             $series_name = is_numeric($filter) ? (series_by_id((int)$filter) ?? $filter) : $filter;
             $books = $index[$series_name] ?? [];
-            usort($books, fn($a, $b) => ($a['series_index'] ?? 0) <=> ($b['series_index'] ?? 0));
+            sort_books($books);
             echo '<p class="back"><a href="' . $base . 'series">&larr; All Series</a></p>';
             echo '<h2 class="filter-heading">' . h($series_name) . '</h2>';
             echo '<div class="card-grid">';
@@ -94,6 +109,7 @@ switch ($view) {
             echo '</ul>';
         } else {
             $books = $index[$filter] ?? [];
+            sort_books($books);
             echo '<p class="back"><a href="' . $base . 'tags">&larr; All Tags</a></p>';
             echo '<h2 class="filter-heading">' . h($filter) . '</h2>';
             echo '<div class="card-grid">';
@@ -119,7 +135,7 @@ switch ($view) {
         } else {
             $pub_name = is_numeric($filter) ? (publisher_by_id((int)$filter) ?? $filter) : $filter;
             $books = $index[$pub_name] ?? [];
-            usort($books, fn($a, $b) => strcmp($a['title'], $b['title']));
+            sort_books($books);
             echo '<p class="back"><a href="' . $base . 'publishers">&larr; All Publishers</a></p>';
             echo '<h2 class="filter-heading">' . h($pub_name) . '</h2>';
             echo '<div class="card-grid">';
