@@ -10,6 +10,7 @@ extracts plain text for full-text search, generates books.json, and copies
 the PHP template files to the output directory.
 """
 
+import ftplib
 import json
 import os
 import os.path
@@ -289,6 +290,92 @@ def publish(config_path: str) -> None:
         print(f"[publish] Copied PHP templates from {template_dir}")
 
     print(f"\n[publish] Done. {len(books)} books published to {output_dir}")
+
+    # ---- FTP deploy (optional) ----
+    if cfg.get("ftp_host"):
+        deploy(output_dir, cfg)
+
+
+# ---------------------------------------------------------------------------
+# FTP deploy
+# ---------------------------------------------------------------------------
+
+ALWAYS_UPLOAD = {".php", ".js", ".css", ".svg"}
+SIZE_CHECK     = {".epub", ".pdf", ".jpg", ".jpeg", ".json", ".txt"}
+
+
+def _ftp_ensure_dir(ftp: ftplib.FTP, remote_dir: str) -> None:
+    parts = [p for p in remote_dir.replace("\\", "/").split("/") if p]
+    path = ""
+    for part in parts:
+        path += "/" + part
+        try:
+            ftp.cwd(path)
+        except ftplib.error_perm:
+            ftp.mkd(path)
+            ftp.cwd(path)
+
+
+def _remote_sizes(ftp: ftplib.FTP, remote_dir: str) -> dict:
+    sizes = {}
+    try:
+        ftp.cwd(remote_dir)
+    except ftplib.error_perm:
+        return sizes
+    lines = []
+    ftp.retrlines("LIST", lines.append)
+    for line in lines:
+        parts = line.split()
+        if len(parts) >= 9:
+            try:
+                sizes[parts[8]] = int(parts[4])
+            except (ValueError, IndexError):
+                pass
+    return sizes
+
+
+def deploy(local_dir: Path, cfg: dict) -> None:
+    host        = cfg["ftp_host"]
+    user        = cfg["ftp_user"]
+    password    = cfg["ftp_pass"]
+    remote_base = cfg["ftp_remote_dir"].rstrip("/")
+
+    print(f"\n[deploy] Connecting to {host}…")
+    ftp = ftplib.FTP(host)
+    ftp.login(user, password)
+    ftp.set_pasv(True)
+    print(f"[deploy] Connected. Uploading → {remote_base}")
+
+    uploaded = skipped = 0
+
+    for local_path in sorted(local_dir.rglob("*")):
+        if not local_path.is_file():
+            continue
+
+        rel        = local_path.relative_to(local_dir)
+        remote_dir = remote_base + ("/" + "/".join(rel.parts[:-1]) if len(rel.parts) > 1 else "")
+        remote_path = remote_base + "/" + "/".join(rel.parts)
+        ext        = local_path.suffix.lower()
+
+        if ext not in ALWAYS_UPLOAD and ext not in SIZE_CHECK:
+            continue
+
+        if ext in SIZE_CHECK:
+            remote_sz = _remote_sizes(ftp, remote_dir).get(local_path.name)
+            if remote_sz == local_path.stat().st_size:
+                skipped += 1
+                continue
+
+        _ftp_ensure_dir(ftp, remote_dir)
+        with open(local_path, "rb") as f:
+            ftp.storbinary(f"STOR {remote_path}", f)
+
+        tag = "force" if ext in ALWAYS_UPLOAD else "changed"
+        print(f"  [{tag}] {rel}")
+        uploaded += 1
+
+    ftp.quit()
+    print(f"[deploy] Done. {uploaded} uploaded, {skipped} skipped.")
 
 
 if __name__ == "__main__":
