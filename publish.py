@@ -286,18 +286,25 @@ def publish(config_path: str) -> None:
 
         # ---- Cache check ----
         # A book is unchanged if: metadata matches the cache AND all expected
-        # output files exist on disk.
+        # output files exist on disk with the same mtime.
+        epub_path  = book_files_dir / "book.epub"
+        pdf_path   = book_files_dir / "book.pdf"
+        epub_mtime = epub_path.stat().st_mtime if epub_path.is_file() else None
+        pdf_mtime  = pdf_path.stat().st_mtime  if pdf_path.is_file()  else None
+
         cached = cache.get(bid_str)
         if cached:
             meta_unchanged = (
-                cached.get("timestamp") == book["timestamp"] and
-                cached.get("title")     == book["title"]     and
-                cached.get("authors")   == book["authors"]   and
-                cached.get("has_epub")  == book["has_epub"]  and
-                cached.get("has_pdf")   == book["has_pdf"]
+                cached.get("timestamp")  == book["timestamp"] and
+                cached.get("title")      == book["title"]     and
+                cached.get("authors")    == book["authors"]   and
+                cached.get("has_epub")   == book["has_epub"]  and
+                cached.get("has_pdf")    == book["has_pdf"]   and
+                cached.get("epub_mtime") == epub_mtime        and
+                cached.get("pdf_mtime")  == pdf_mtime
             )
-            epub_ok = (not book["has_epub"]) or (book_files_dir / "book.epub").is_file()
-            pdf_ok  = (not book["has_pdf"])  or (book_files_dir / "book.pdf").is_file()
+            epub_ok  = (not book["has_epub"]) or epub_path.is_file()
+            pdf_ok   = (not book["has_pdf"])  or pdf_path.is_file()
             cover_ok = (covers_dir / f"{bid}.jpg").is_file()
 
             if meta_unchanged and epub_ok and pdf_ok and cover_ok:
@@ -364,6 +371,10 @@ def publish(config_path: str) -> None:
         book["series_id"]    = cb.get("series_id",    0)
         book["publisher_id"] = cb.get("publisher_id", 0)
         book["author_ids"]   = cb.get("author_ids",   [])
+
+        # Store file mtimes for cache invalidation
+        book["epub_mtime"] = epub_path.stat().st_mtime if epub_path.is_file() else None
+        book["pdf_mtime"]  = pdf_path.stat().st_mtime  if pdf_path.is_file()  else None
 
         books.append(book)
         new_cache[bid_str] = book
